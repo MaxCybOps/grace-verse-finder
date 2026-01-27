@@ -1,0 +1,4 @@
+project_id = "brruvukxwlubvovduhai"
+
+[functions.bible-assistant]
+verify_jwt = false

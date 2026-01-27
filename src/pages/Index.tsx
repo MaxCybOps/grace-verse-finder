@@ -4,6 +4,7 @@ import { DailyVerse } from "@/components/DailyVerse";
 import { BookList } from "@/components/BookList";
 import { ChapterSelector } from "@/components/ChapterSelector";
 import { ChapterView } from "@/components/ChapterView";
+import { BibleAssistant } from "@/components/BibleAssistant";
 import { Book } from "@/data/bibleData";
 import { BookOpen } from "lucide-react";
 
@@ -85,6 +86,8 @@ const Index = () => {
           </div>
         )}
       </main>
+      
+      <BibleAssistant />
     </div>
   );
 };
