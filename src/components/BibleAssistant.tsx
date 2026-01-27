@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Send, Sparkles } from "lucide-react";
+import { MessageCircle, X, Send, Sparkles, Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -16,6 +17,7 @@ export const BibleAssistant = () => {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { isRecording, isProcessing, startRecording, stopRecording, transcribeAudio } = useVoiceRecorder();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -83,10 +85,10 @@ export const BibleAssistant = () => {
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
-    const userMsg: Message = { role: "user", content: input.trim() };
+    const userMsg: Message = { role: "user", content: text.trim() };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
@@ -105,12 +107,53 @@ export const BibleAssistant = () => {
     }
   };
 
+  const handleSend = () => sendMessage(input);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
+
+  const handleVoiceClick = async () => {
+    if (isRecording) {
+      try {
+        const audioBlob = await stopRecording();
+        const transcription = await transcribeAudio(audioBlob);
+        
+        if (transcription.trim()) {
+          await sendMessage(transcription);
+        } else {
+          toast({
+            title: "No speech detected",
+            description: "Please try speaking again",
+            variant: "destructive",
+          });
+        }
+      } catch (e) {
+        console.error("Voice error:", e);
+        toast({
+          title: "Voice Error",
+          description: e instanceof Error ? e.message : "Failed to process voice",
+          variant: "destructive",
+        });
+      }
+    } else {
+      try {
+        await startRecording();
+      } catch (e) {
+        console.error("Microphone error:", e);
+        toast({
+          title: "Microphone Access Required",
+          description: "Please allow microphone access to use voice messages",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const isVoiceBusy = isRecording || isProcessing;
 
   return (
     <>
@@ -151,7 +194,7 @@ export const BibleAssistant = () => {
                 <MessageCircle className="h-12 w-12 mx-auto mb-3 text-primary/40" />
                 <p className="font-serif text-lg mb-2">Welcome, dear friend</p>
                 <p className="text-sm">
-                  Ask me anything about the Bible or seek spiritual guidance. I'm here to help.
+                  Ask me anything about the Bible or seek spiritual guidance. You can type or use voice messages.
                 </p>
               </div>
             )}
@@ -193,14 +236,28 @@ export const BibleAssistant = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask a question..."
-                disabled={isLoading}
+                placeholder={isProcessing ? "Transcribing..." : "Ask a question..."}
+                disabled={isLoading || isVoiceBusy}
                 className="flex-1"
               />
-              <Button onClick={handleSend} disabled={isLoading || !input.trim()} size="icon">
+              <Button
+                onClick={handleVoiceClick}
+                disabled={isLoading || isProcessing}
+                size="icon"
+                variant={isRecording ? "destructive" : "outline"}
+                className={isRecording ? "animate-pulse" : ""}
+              >
+                {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
+              <Button onClick={handleSend} disabled={isLoading || !input.trim() || isVoiceBusy} size="icon">
                 <Send className="h-4 w-4" />
               </Button>
             </div>
+            {isRecording && (
+              <p className="text-xs text-center text-muted-foreground mt-2 animate-pulse">
+                🎙️ Recording... Tap the stop button when done
+              </p>
+            )}
           </div>
         </div>
       )}
