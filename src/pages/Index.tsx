@@ -1,34 +1,55 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { DailyVerse } from "@/components/DailyVerse";
-import { BookList } from "@/components/BookList";
-import { ChapterSelector } from "@/components/ChapterSelector";
-import { ChapterView } from "@/components/ChapterView";
+import { VersionSelector } from "@/components/VersionSelector";
+import { ApiBookList } from "@/components/ApiBookList";
+import { ApiChapterSelector } from "@/components/ApiChapterSelector";
+import { ApiChapterView } from "@/components/ApiChapterView";
 import { BibleAssistant } from "@/components/BibleAssistant";
-import { Book } from "@/data/bibleData";
+import { BibleVersion, BibleBook } from "@/hooks/useBibleApi";
 import { BookOpen } from "lucide-react";
 
 type View = "home" | "chapters" | "reading";
 
+const STORAGE_KEY = "selectedBibleVersion";
+
 const Index = () => {
   const [view, setView] = useState<View>("home");
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
-  const [selectedChapter, setSelectedChapter] = useState<number>(1);
+  const [selectedVersion, setSelectedVersion] = useState<BibleVersion | null>(null);
+  const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
+  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
+  const [selectedChapterNumber, setSelectedChapterNumber] = useState<string>("1");
 
-  const handleSelectBook = (book: Book) => {
+  // Load saved version from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        setSelectedVersion(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse saved version");
+      }
+    }
+  }, []);
+
+  const handleSelectVersion = (version: BibleVersion) => {
+    setSelectedVersion(version);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(version));
+    // Reset selection when version changes
+    setSelectedBook(null);
+    setSelectedChapterId(null);
+    setView("home");
+  };
+
+  const handleSelectBook = (book: BibleBook) => {
     setSelectedBook(book);
     setView("chapters");
   };
 
-  const handleSelectChapter = (chapter: number) => {
-    setSelectedChapter(chapter);
+  const handleSelectChapter = (chapterId: string, chapterNumber: string) => {
+    setSelectedChapterId(chapterId);
+    setSelectedChapterNumber(chapterNumber);
     setView("reading");
-  };
-
-  const handleNavigateChapter = (chapter: number) => {
-    if (selectedBook && chapter >= 1 && chapter <= selectedBook.chapters) {
-      setSelectedChapter(chapter);
-    }
   };
 
   const handleBackToBooks = () => {
@@ -42,7 +63,7 @@ const Index = () => {
 
   const handleHomeClick = () => {
     setSelectedBook(null);
-    setSelectedChapter(1);
+    setSelectedChapterId(null);
     setView("home");
   };
 
@@ -51,39 +72,67 @@ const Index = () => {
       <Header onHomeClick={handleHomeClick} />
 
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {view === "home" && (
-          <div className="space-y-8 animate-fade-in">
-            <DailyVerse />
+        {/* Version Selector - Always visible */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <BookOpen className="w-5 h-5 text-primary" />
+            <span className="font-serif text-lg text-foreground">Bible Version:</span>
+          </div>
+          <VersionSelector
+            selectedVersion={selectedVersion?.id || null}
+            onSelectVersion={handleSelectVersion}
+          />
+        </div>
 
-            <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
-              <div className="flex items-center gap-2 mb-6">
-                <BookOpen className="w-5 h-5 text-primary" />
-                <h2 className="font-serif text-xl text-foreground">Select a Book</h2>
+        {!selectedVersion ? (
+          <div className="bg-card rounded-lg p-8 shadow-sm border border-border text-center">
+            <h2 className="font-serif text-2xl text-foreground mb-4">Welcome to Grace Verse Finder</h2>
+            <p className="text-muted-foreground mb-6">
+              Please select a Bible version above to begin reading scripture.
+            </p>
+          </div>
+        ) : (
+          <>
+            {view === "home" && (
+              <div className="space-y-8 animate-fade-in">
+                <DailyVerse />
+
+                <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
+                  <div className="flex items-center gap-2 mb-6">
+                    <BookOpen className="w-5 h-5 text-primary" />
+                    <h2 className="font-serif text-xl text-foreground">Select a Book</h2>
+                    <span className="text-sm text-muted-foreground ml-2">
+                      ({selectedVersion.abbreviationLocal || selectedVersion.abbreviation})
+                    </span>
+                  </div>
+                  <ApiBookList bibleId={selectedVersion.id} onSelectBook={handleSelectBook} />
+                </div>
               </div>
-              <BookList onSelectBook={handleSelectBook} />
-            </div>
-          </div>
-        )}
+            )}
 
-        {view === "chapters" && selectedBook && (
-          <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
-            <ChapterSelector
-              book={selectedBook}
-              onSelectChapter={handleSelectChapter}
-              onBack={handleBackToBooks}
-            />
-          </div>
-        )}
+            {view === "chapters" && selectedBook && (
+              <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
+                <ApiChapterSelector
+                  bibleId={selectedVersion.id}
+                  book={selectedBook}
+                  onSelectChapter={handleSelectChapter}
+                  onBack={handleBackToBooks}
+                />
+              </div>
+            )}
 
-        {view === "reading" && selectedBook && (
-          <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
-            <ChapterView
-              book={selectedBook}
-              chapter={selectedChapter}
-              onBack={handleBackToChapters}
-              onNavigate={handleNavigateChapter}
-            />
-          </div>
+            {view === "reading" && selectedBook && selectedChapterId && (
+              <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
+                <ApiChapterView
+                  bibleId={selectedVersion.id}
+                  book={selectedBook}
+                  chapterId={selectedChapterId}
+                  chapterNumber={selectedChapterNumber}
+                  onBack={handleBackToChapters}
+                />
+              </div>
+            )}
+          </>
         )}
       </main>
       
